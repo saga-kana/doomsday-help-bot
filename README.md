@@ -1,10 +1,13 @@
 # 再接続を止める
+```
 sudo iptables -I FORWARD -p tcp -d 204.141.172.10 --tcp-flags SYN SYN -j DROP
-
+```
 # capture
+```
 sudo venv/bin/python capture.py 38884 11530 34848 11539
-
+```
 # port list
+```
 sudo tcpdump -i waydroid0 -n -tt -l dst host 204.141.172.10 | awk  'BEGIN {   
     # 除外リストを読み込む   
     while ((getline < "exclude.txt") > 0) {     
@@ -26,8 +29,9 @@ sudo tcpdump -i waydroid0 -n -tt -l dst host 204.141.172.10 | awk  'BEGIN {
             fflush();   
         } 
     }'
-
+```
 # HELP.txt
+```
 sudo tcpdump -i waydroid0 -n -tt -l dst host 204.141.172.10 | awk  '/0x[0-9a-f]+:/ {   
     for (i = 2; i <= NF; i++) {     
         hex = hex $i;   
@@ -40,3 +44,5 @@ sudo tcpdump -i waydroid0 -n -tt -l dst host 204.141.172.10 | awk  '/0x[0-9a-f]+
     }   
     hex = ""; 
 }'
+```
+```
