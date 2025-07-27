@@ -4,7 +4,7 @@ from scapy.all import sniff, IP, TCP, Raw, send, RandShort, Ether, sendp
 from scapy.layers.inet import TCP, IP
 import subprocess
 import atexit
-import sys
+import sys, os
 
 # ターゲットIP
 remote_mac = "00:00:17:4b:6f:6e"
@@ -13,12 +13,21 @@ remote_ip = "204.141.172.10"
 local_ip = "10.1.0.92" # enp1s0のIPアドレス
 window_size = 65535
 ttl = 63
-# local_port1 = int(sys.argv[2])
-# remote_port1 = int(sys.argv[1]) # 11531
-# local_port2 = int(sys.argv[4])
-# remote_port2 = int(sys.argv[3]) # 11538
+local_port1 = int(sys.argv[1])
+remote_port1 = int(sys.argv[2]) # 11531
+local_port2 = int(sys.argv[3])
+remote_port2 = int(sys.argv[4]) # 11538
 # 11531 : 0400 1627
 # 11539 : 0400 58c3
+
+primary_ports = [11530, 11531, 11532, 11533]
+secondary_ports = [11538, 11539]
+
+# ACKのタイムスタンプ保存用グローバル変数
+primary_ack_ts = {'tsval': None, 'tsecr': None, 'timestamp': None}
+secondary_ack_ts = {'tsval': None, 'tsecr': None, 'timestamp': None}
+
+last_help_mtime = None
 
 # sniffで得た最新のTCP情報を保存するグローバル変数
 latest_tcp_info1 = {
@@ -64,27 +73,27 @@ def setup_iptables():
                 "-j", "DROP"
             ], check=True)
     
-    for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
-        # IN
-        subprocess.run([
-            "iptables", "-I", "INPUT",
-            "-p", "tcp",
-            "-d", local_ip,
-            "--dport", str(local_port),
-            "-s", remote_ip,
-            "--sport", str(remote_port),
-            "-j", "ACCEPT"
-        ], check=True)
-        # OUT
-        subprocess.run([
-            "iptables", "-I", "INPUT",
-            "-p", "tcp",
-            "-s", local_ip,
-            "--sport", str(local_port),
-            "-d", remote_ip,
-            "--dport", str(remote_port),
-            "-j", "ACCEPT"
-        ], check=True)
+    # for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
+    #     # IN
+    #     subprocess.run([
+    #         "iptables", "-I", "INPUT",
+    #         "-p", "tcp",
+    #         "-d", local_ip,
+    #         "--dport", str(local_port),
+    #         "-s", remote_ip,
+    #         "--sport", str(remote_port),
+    #         "-j", "ACCEPT"
+    #     ], check=True)
+    #     # OUT
+    #     subprocess.run([
+    #         "iptables", "-I", "INPUT",
+    #         "-p", "tcp",
+    #         "-s", local_ip,
+    #         "--sport", str(local_port),
+    #         "-d", remote_ip,
+    #         "--dport", str(remote_port),
+    #         "-j", "ACCEPT"
+    #     ], check=True)
     print("✅ Packet dropping rules installed")
 
 # プログラム終了時にiptablesルールを削除
@@ -108,25 +117,25 @@ def cleanup_iptables():
                     "-j", "DROP"
                 ], check=True)
 
-        for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
-            subprocess.run([
-                "iptables", "-D", "INPUT",
-                "-p", "tcp",
-                "-d", local_ip,
-                "--dport", str(local_port),
-                "-s", remote_ip,
-                "--sport", str(remote_port),
-                "-j", "ACCEPT"
-            ], check=True)
-            subprocess.run([
-                "iptables", "-D", "INPUT",
-                "-p", "tcp",
-                "-s", local_ip,
-                "--sport", str(local_port),
-                "-d", remote_ip,
-                "--dport", str(remote_port),
-                "-j", "ACCEPT"
-            ], check=True)
+        # for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
+        #     subprocess.run([
+        #         "iptables", "-D", "INPUT",
+        #         "-p", "tcp",
+        #         "-d", local_ip,
+        #         "--dport", str(local_port),
+        #         "-s", remote_ip,
+        #         "--sport", str(remote_port),
+        #         "-j", "ACCEPT"
+        #     ], check=True)
+        #     subprocess.run([
+        #         "iptables", "-D", "INPUT",
+        #         "-p", "tcp",
+        #         "-s", local_ip,
+        #         "--sport", str(local_port),
+        #         "-d", remote_ip,
+        #         "--dport", str(remote_port),
+        #         "-j", "ACCEPT"
+        #     ], check=True)
         print("✅ Packet dropping rules removed")
     except subprocess.CalledProcessError:
         print("⚠️ Error removing iptables rules")
@@ -152,6 +161,8 @@ def packet_callback(pkt):
             #     print(f"📄 Payload: {payload.hex()}")
 
             # 最新のTCP情報を保存
+            global latest_tcp_info1
+            global latest_tcp_info2
             if local_port == local_port1 and remote_port == remote_port1:
                 latest_tcp_info1['src_ip'] = pkt[IP].dst
                 latest_tcp_info1['dst_ip'] = pkt[IP].src
@@ -180,7 +191,7 @@ def packet_callback(pkt):
             tsval = None
             tsecr = None
             if local_port == local_port1 and remote_port == remote_port1:
-                global primary_ack_ts
+                # global primary_ack_ts
                 if primary_ack_ts['tsval'] is not None and primary_ack_ts['timestamp'] is not None:
                     tsval = int(time.time() * 1000 - primary_ack_ts['timestamp'] * 1000 + primary_ack_ts['tsval'])
                 # pktのTCPオプションからtsval抽出
@@ -190,7 +201,7 @@ def packet_callback(pkt):
                             tsecr = opt[1][0]
                             break
             elif local_port == local_port2 and remote_port == remote_port2:
-                global secondary_ack_ts
+                # global secondary_ack_ts
                 if secondary_ack_ts['tsval'] is not None and secondary_ack_ts['timestamp'] is not None:
                     tsval = int(time.time() * 1000 - secondary_ack_ts['timestamp'] * 1000 + secondary_ack_ts['tsval'])
                 if hasattr(pkt[TCP], 'options'):
@@ -219,6 +230,18 @@ def packet_callback(pkt):
                 window=window_size,
                 options=tcp_options
             )
+            global last_help_mtime
+            if os.path.exists("./help.txt") and local_port == local_port1:
+                mtime = os.path.getmtime("./help.txt")
+                if last_help_mtime is None or mtime > last_help_mtime:
+                    # Rebuild TCP layer with flags='PA'
+                    tcp_layer = ack_packet.getlayer(TCP)
+                    tcp_layer.flags = 'PA'
+                    ack_packet = ack_packet / Raw(load=bytes.fromhex("0400e228"))
+                    print("HELP! (flags=PA)")
+                    last_help_mtime = mtime
+                    # os.remove("help.txt")
+                    # last_help_mtime = None
             print(f"✅ ACK sent | TSval={tsval}, TSecr={tsecr}")
             ack_packet = Ether(dst=remote_mac, src=local_mac)/ack_packet
             sendp(ack_packet, iface="enp1s0", verbose=0)
@@ -281,7 +304,7 @@ def periodic_psh_sender1():
             # TCP options (NOP,NOP,Timestamp) 計算
             tsval = None
             tsecr = None
-            global primary_ack_ts
+            # global primary_ack_ts
             if primary_ack_ts['tsval'] is not None and primary_ack_ts['timestamp'] is not None:
                 tsval = int(time.time() * 1000 - primary_ack_ts['timestamp'] * 1000 + primary_ack_ts['tsval'])
             # latest_tcp_info1のtcp_optionsからtsecr抽出
@@ -326,7 +349,7 @@ def periodic_psh_sender2():
             # TCP options (NOP,NOP,Timestamp) 計算
             tsval = None
             tsecr = None
-            global secondary_ack_ts
+            # global secondary_ack_ts
             if secondary_ack_ts['tsval'] is not None and secondary_ack_ts['timestamp'] is not None:
                 tsval = int(time.time() * 1000 - secondary_ack_ts['timestamp'] * 1000 + secondary_ack_ts['tsval'])
             tcp_opts = latest_tcp_info2.get('tcp_options', [])
@@ -359,12 +382,7 @@ def periodic_psh_sender2():
             sendp(psh_packet, iface="enp1s0", verbose=0)
             print(f"[+] Periodic PSH-ACK sent to {latest_tcp_info2['dst_ip']}:{latest_tcp_info2['dport']} | TSval={tsval}, TSecr={tsecr}")
 
-primary_ports = [11531, 11532, 11533]
-secondary_ports = [11538, 11539]
 
-# ACKのタイムスタンプ保存用グローバル変数
-primary_ack_ts = {'tsval': None, 'tsecr': None, 'timestamp': None}
-secondary_ack_ts = {'tsval': None, 'tsecr': None, 'timestamp': None}
 
 def make_ack_filter(ports):
     def ack_filter(pkt):
@@ -383,19 +401,19 @@ def make_ack_filter(ports):
                         break
             now = time.time()
             if pkt[TCP].dport in primary_ports:
-                global primary_ack_ts
-                global local_port1, remote_port1
-                local_port1 = pkt[TCP].sport
-                remote_port1 = pkt[TCP].dport
+                # global primary_ack_ts
+                # global local_port1, remote_port1
+                # local_port1 = pkt[TCP].sport
+                # remote_port1 = pkt[TCP].dport
                 primary_ack_ts['tsval'] = tsval
                 primary_ack_ts['tsecr'] = tsecr
                 primary_ack_ts['timestamp'] = now
                 latest_tcp_info1['psh_sent'] = True
             elif pkt[TCP].dport in secondary_ports:
-                global secondary_ack_ts
-                global local_port2, remote_port2
-                local_port2 = pkt[TCP].sport
-                remote_port2 = pkt[TCP].dport
+                # global secondary_ack_ts
+                # global local_port2, remote_port2
+                # local_port2 = pkt[TCP].sport
+                # remote_port2 = pkt[TCP].dport
                 secondary_ack_ts['tsval'] = tsval
                 secondary_ack_ts['tsecr'] = tsecr
                 secondary_ack_ts['timestamp'] = now
@@ -414,10 +432,10 @@ def debug_packet_callback(pkt):
     if IP in pkt and TCP in pkt:
         print(f"DEBUG: Packet from {pkt[IP].src}:{pkt[TCP].sport} to {pkt[IP].dst}:{pkt[TCP].dport}, flags={pkt[TCP].flags}, seq={pkt[TCP].seq}, ack={pkt[TCP].ack}")
 
-local_port1 = 0
-remote_port1 = 0 # 11531
-local_port2 = 0
-remote_port2 = 0 # 11538
+# local_port1 = 0
+# remote_port1 = 0 # 11531
+# local_port2 = 0
+# remote_port2 = 0 # 11538
 
 
 # バックグラウンドでタイムスロット送信を開始
