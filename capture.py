@@ -29,6 +29,7 @@ secondary_ack_ts = {'tsval': None, 'tsecr': None, 'timestamp': None}
 
 last_help_mtime = None
 
+
 # sniffで得た最新のTCP情報を保存するグローバル変数
 latest_tcp_info1 = {
     'src_ip': None,
@@ -49,6 +50,10 @@ latest_tcp_info2 = {
     'ack': None,
     'psh_sent': False
 }
+
+# ACKカウント（periodic送信制御用）
+ack_count1 = 0
+ack_count2 = 0
 
 
 # iptablesルールを設定
@@ -72,6 +77,14 @@ def setup_iptables():
                 "--tcp-flags", flag, flagstr,
                 "-j", "DROP"
             ], check=True)
+        subprocess.run([
+            "iptables", "-I", "FORWARD",
+            "-p", "tcp",
+            "-s", remote_ip,
+            "--dport", str(local_port),
+            "--sport", str(remote_port),
+            "-j", "DROP"
+        ], check=True)
     
     # for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
     #     # IN
@@ -116,6 +129,14 @@ def cleanup_iptables():
                     "--tcp-flags", flag, flagstr,
                     "-j", "DROP"
                 ], check=True)
+            subprocess.run([
+                "iptables", "-D", "FORWARD",
+                "-p", "tcp",
+                "-s", remote_ip,
+                "--dport", str(local_port),
+                "--sport", str(remote_port),
+                "-j", "DROP"
+            ], check=True)
 
         # for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
         #     subprocess.run([
@@ -242,6 +263,14 @@ def packet_callback(pkt):
                     last_help_mtime = mtime
                     # os.remove("help.txt")
                     # last_help_mtime = None
+
+            # ACKカウントをインクリメント
+            global ack_count1, ack_count2
+            if local_port == local_port1 and remote_port == remote_port1:
+                ack_count1 += 1
+            elif local_port == local_port2 and remote_port == remote_port2:
+                ack_count2 += 1
+
             print(f"✅ ACK sent | TSval={tsval}, TSecr={tsecr}")
             ack_packet = Ether(dst=remote_mac, src=local_mac)/ack_packet
             sendp(ack_packet, iface="enp1s0", verbose=0)
@@ -298,89 +327,96 @@ def periodic_psh_sender1():
     # while (latest_tcp_info1['src_ip'] is None or not latest_tcp_info1.get('psh_sent')):
     while not latest_tcp_info1.get('psh_sent'):
         time.sleep(0.1)
+    global ack_count1
     while True:
         if latest_tcp_info1['psh_sent']:
-            time.sleep(15)
-            # TCP options (NOP,NOP,Timestamp) 計算
-            tsval = None
-            tsecr = None
-            # global primary_ack_ts
-            if primary_ack_ts['tsval'] is not None and primary_ack_ts['timestamp'] is not None:
-                tsval = int(time.time() * 1000 - primary_ack_ts['timestamp'] * 1000 + primary_ack_ts['tsval'])
-            # latest_tcp_info1のtcp_optionsからtsecr抽出
-            tcp_opts = latest_tcp_info1.get('tcp_options', [])
-            if tcp_opts:
-                for opt in tcp_opts:
-                    if isinstance(opt, tuple) and opt[0] == 'Timestamp':
-                        tsecr = opt[1][0]
-                        break
-            tcp_options = []
-            if tsval is not None and tsecr is not None:
-                tcp_options = [('NOP', None), ('NOP', None), ('Timestamp', (tsval, tsecr))]
+            if ack_count1 >= 1:
+                time.sleep(15)
+                # TCP options (NOP,NOP,Timestamp) 計算
+                tsval = None
+                tsecr = None
+                if primary_ack_ts['tsval'] is not None and primary_ack_ts['timestamp'] is not None:
+                    tsval = int(time.time() * 1000 - primary_ack_ts['timestamp'] * 1000 + primary_ack_ts['tsval'])
+                tcp_opts = latest_tcp_info1.get('tcp_options', [])
+                if tcp_opts:
+                    for opt in tcp_opts:
+                        if isinstance(opt, tuple) and opt[0] == 'Timestamp':
+                            tsecr = opt[1][0]
+                            break
+                tcp_options = []
+                if tsval is not None and tsecr is not None:
+                    tcp_options = [('NOP', None), ('NOP', None), ('Timestamp', (tsval, tsecr))]
+                else:
+                    tcp_options = tcp_opts
+                psh_packet = IP(
+                    src=latest_tcp_info1['src_ip'],
+                    dst=latest_tcp_info1['dst_ip'],
+                    id=RandShort(),
+                    ttl=latest_tcp_info1.get('ttl', 64),
+                    options=latest_tcp_info1.get('ip_options', [])
+                )/TCP(
+                    sport=latest_tcp_info1['sport'],
+                    dport=latest_tcp_info1['dport'],
+                    seq=latest_tcp_info1['seq'],
+                    ack=latest_tcp_info1['ack'],
+                    flags='PA',
+                    window=latest_tcp_info1.get('tcp_window', window_size),
+                    options=tcp_options
+                )/Raw(load=bytes.fromhex("04001627"))
+                psh_packet = Ether(dst=remote_mac, src=local_mac)/psh_packet
+                sendp(psh_packet, iface="enp1s0", verbose=0)
+                print(f"[+] Periodic PSH-ACK sent to {latest_tcp_info1['dst_ip']}:{latest_tcp_info1['dport']} | TSval={tsval}, TSecr={tsecr}")
+                ack_count1 = 0
             else:
-                tcp_options = tcp_opts
-            psh_packet = IP(
-                src=latest_tcp_info1['src_ip'],
-                dst=latest_tcp_info1['dst_ip'],
-                id=RandShort(),
-                ttl=latest_tcp_info1.get('ttl', 64),
-                options=latest_tcp_info1.get('ip_options', [])
-            )/TCP(
-                sport=latest_tcp_info1['sport'],
-                dport=latest_tcp_info1['dport'],
-                seq=latest_tcp_info1['seq'],
-                ack=latest_tcp_info1['ack'],
-                flags='PA',
-                window=latest_tcp_info1.get('tcp_window', window_size),
-                options=tcp_options
-            )/Raw(load=bytes.fromhex("04001627"))
-            psh_packet = Ether(dst=remote_mac, src=local_mac)/psh_packet
-            sendp(psh_packet, iface="enp1s0", verbose=0)
-            print(f"[+] Periodic PSH-ACK sent to {latest_tcp_info1['dst_ip']}:{latest_tcp_info1['dport']} | TSval={tsval}, TSecr={tsecr}")
+                time.sleep(1)
 
 def periodic_psh_sender2():
     # sniffでACK送信が行われるまで待機（両方）
     # while (latest_tcp_info2['src_ip'] is None or not latest_tcp_info2.get('psh_sent')):
     while not latest_tcp_info2.get('psh_sent'):
         time.sleep(0.1)
+    global ack_count2
     while True:
         if latest_tcp_info2['psh_sent']:
-            time.sleep(15)
-            # TCP options (NOP,NOP,Timestamp) 計算
-            tsval = None
-            tsecr = None
-            # global secondary_ack_ts
-            if secondary_ack_ts['tsval'] is not None and secondary_ack_ts['timestamp'] is not None:
-                tsval = int(time.time() * 1000 - secondary_ack_ts['timestamp'] * 1000 + secondary_ack_ts['tsval'])
-            tcp_opts = latest_tcp_info2.get('tcp_options', [])
-            if tcp_opts:
-                for opt in tcp_opts:
-                    if isinstance(opt, tuple) and opt[0] == 'Timestamp':
-                        tsecr = opt[1][0]
-                        break
-            tcp_options = []
-            if tsval is not None and tsecr is not None:
-                tcp_options = [('NOP', None), ('NOP', None), ('Timestamp', (tsval, tsecr))]
+            if ack_count2 >= 1:
+                time.sleep(15)
+                # TCP options (NOP,NOP,Timestamp) 計算
+                tsval = None
+                tsecr = None
+                if secondary_ack_ts['tsval'] is not None and secondary_ack_ts['timestamp'] is not None:
+                    tsval = int(time.time() * 1000 - secondary_ack_ts['timestamp'] * 1000 + secondary_ack_ts['tsval'])
+                tcp_opts = latest_tcp_info2.get('tcp_options', [])
+                if tcp_opts:
+                    for opt in tcp_opts:
+                        if isinstance(opt, tuple) and opt[0] == 'Timestamp':
+                            tsecr = opt[1][0]
+                            break
+                tcp_options = []
+                if tsval is not None and tsecr is not None:
+                    tcp_options = [('NOP', None), ('NOP', None), ('Timestamp', (tsval, tsecr))]
+                else:
+                    tcp_options = tcp_opts
+                psh_packet = IP(
+                    src=latest_tcp_info2['src_ip'],
+                    dst=latest_tcp_info2['dst_ip'],
+                    id=RandShort(),
+                    ttl=latest_tcp_info2.get('ttl', 64),
+                    options=latest_tcp_info2.get('ip_options', [])
+                )/TCP(
+                    sport=latest_tcp_info2['sport'],
+                    dport=latest_tcp_info2['dport'],
+                    seq=latest_tcp_info2['seq'],
+                    ack=latest_tcp_info2['ack'],
+                    flags='PA',
+                    window=latest_tcp_info2.get('tcp_window', window_size),
+                    options=tcp_options
+                )/Raw(load=bytes.fromhex("040058c3"))
+                psh_packet = Ether(dst=remote_mac, src=local_mac)/psh_packet
+                sendp(psh_packet, iface="enp1s0", verbose=0)
+                print(f"[+] Periodic PSH-ACK sent to {latest_tcp_info2['dst_ip']}:{latest_tcp_info2['dport']} | TSval={tsval}, TSecr={tsecr}")
+                ack_count2 = 0
             else:
-                tcp_options = tcp_opts
-            psh_packet = IP(
-                src=latest_tcp_info2['src_ip'],
-                dst=latest_tcp_info2['dst_ip'],
-                id=RandShort(),
-                ttl=latest_tcp_info2.get('ttl', 64),
-                options=latest_tcp_info2.get('ip_options', [])
-            )/TCP(
-                sport=latest_tcp_info2['sport'],
-                dport=latest_tcp_info2['dport'],
-                seq=latest_tcp_info2['seq'],
-                ack=latest_tcp_info2['ack'],
-                flags='PA',
-                window=latest_tcp_info2.get('tcp_window', window_size),
-                options=tcp_options
-            )/Raw(load=bytes.fromhex("040058c3"))
-            psh_packet = Ether(dst=remote_mac, src=local_mac)/psh_packet
-            sendp(psh_packet, iface="enp1s0", verbose=0)
-            print(f"[+] Periodic PSH-ACK sent to {latest_tcp_info2['dst_ip']}:{latest_tcp_info2['dport']} | TSval={tsval}, TSecr={tsecr}")
+                time.sleep(1)
 
 
 
