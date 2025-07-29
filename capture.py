@@ -35,6 +35,7 @@ help_packet_pending = False
 help_packet_seq = None
 help_packet_ack = None
 help_ack_count = 0  # 0400e228未ACK時の通常ACKカウント
+help_ack_count_threshold = 5  # 5回のACKで再送
 
 
 # sniffで得た最新のTCP情報を保存するグローバル変数
@@ -293,7 +294,7 @@ def packet_callback(pkt):
             # help.txtトリガー: 0400e228送信 & pending管理
             if os.path.exists("./help.txt") and local_port == local_port1:
                 mtime = os.path.getmtime("./help.txt")
-                if (last_help_mtime is None or mtime > last_help_mtime) or help_packet_pending:
+                if (last_help_mtime is None or mtime > last_help_mtime):
                     # まだACKが返ってきていない場合は再送
                     tcp_layer = ack_packet.getlayer(TCP)
                     tcp_layer.flags = 'PA'
@@ -320,12 +321,12 @@ def packet_callback(pkt):
                 # help_packet_pending中は通常ACKカウント
                 if help_packet_pending:
                     help_ack_count += 1
-                    if help_ack_count >= 5:
-                        # 5回目で再送
+                    if help_ack_count >= help_ack_count_threshold:
+                        # help_ack_count_threshold回目で再送
                         tcp_layer = ack_packet.getlayer(TCP)
                         tcp_layer.flags = 'PA'
                         ack_packet = ack_packet / Raw(load=bytes.fromhex("0400e228"))
-                        print("[help.txt] 0400e228 RETRANSMIT (5 normal ACKs)")
+                        print("[help.txt] 0400e228 RETRANSMIT (help_ack_count_threshold normal ACKs)")
                         help_packet_seq = tcp_layer.seq
                         help_packet_ack = tcp_layer.ack
                         help_ack_count = 0
@@ -334,7 +335,9 @@ def packet_callback(pkt):
                         sendp(ack_packet, iface="enp1s0", verbose=0)
                         return
             elif local_port == local_port2 and remote_port == remote_port2:
-                ack_count2 += 1
+                # RSTフラグが立っていない場合のみカウント
+                if not (pkt[TCP].flags & 0x04):
+                    ack_count2 += 1
 
             print(f"✅ ACK sent | TSval={tsval}, TSecr={tsecr}")
             ack_packet = Ether(dst=remote_mac, src=local_mac)/ack_packet

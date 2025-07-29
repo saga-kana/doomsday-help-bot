@@ -45,4 +45,10 @@ sudo tcpdump -i waydroid0 -n -tt -l dst host 204.141.172.10 | awk  '/0x[0-9a-f]+
     hex = ""; 
 }'
 ```
+
+# ログ確認
 ```
+tmux pipe-pane -t 8 'cat >> /tmp/tmux_8.log'
+```
+
+
