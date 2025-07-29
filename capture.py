@@ -72,16 +72,24 @@ def setup_iptables():
     for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
         # for flag, flagstr in [("SYN", "SYN"), ("ACK", "ACK"), ("ACK,PSH", "ACK,PSH"), ("RST", "RST"), ("FIN", "FIN")]:
         # for flag, flagstr in [("ACK,PSH", "ACK"), ("RST", "RST"), ("FIN,PSH,ACK", "FIN,PSH,ACK"), ("FIN,ACK", "FIN,ACK")]:
-        for flag, flagstr in [("ACK", "ACK"), ("RST", "RST"), ("FIN,PSH,ACK", "FIN,PSH,ACK"), ("FIN,ACK", "FIN,ACK")]:
-            subprocess.run([
-                "iptables", "-I", "FORWARD",
-                "-p", "tcp",
-                "-d", remote_ip,
-                "--sport", str(local_port),
-                "--dport", str(remote_port),
-                "--tcp-flags", flag, flagstr,
-                "-j", "DROP"
-            ], check=True)
+        # for flag, flagstr in [("ACK", "ACK"), ("RST", "RST"), ("FIN,PSH,ACK", "FIN,PSH,ACK"), ("FIN,ACK", "FIN,ACK")]:
+        #     subprocess.run([
+        #         "iptables", "-I", "FORWARD",
+        #         "-p", "tcp",
+        #         "-d", remote_ip,
+        #         "--sport", str(local_port),
+        #         "--dport", str(remote_port),
+        #         "--tcp-flags", flag, flagstr,
+        #         "-j", "DROP"
+        #     ], check=True)
+        subprocess.run([
+            "iptables", "-I", "FORWARD",
+            "-p", "tcp",
+            "-d", remote_ip,
+            "--sport", str(local_port),
+            "--dport", str(remote_port),
+            "-j", "DROP"
+        ], check=True)
         subprocess.run([
             "iptables", "-I", "FORWARD",
             "-p", "tcp",
@@ -124,16 +132,24 @@ def cleanup_iptables():
         for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
             # for flag, flagstr in [("SYN", "SYN"), ("ACK", "ACK"), ("ACK,PSH", "ACK,PSH"), ("RST", "RST"), ("FIN", "FIN")]:
             # for flag, flagstr in [("ACK,PSH", "ACK"), ("RST", "RST"), ("FIN,PSH,ACK", "FIN,PSH,ACK"), ("FIN,ACK", "FIN,ACK")]:
-            for flag, flagstr in [("ACK", "ACK"), ("RST", "RST"), ("FIN,PSH,ACK", "FIN,PSH,ACK"), ("FIN,ACK", "FIN,ACK")]:
-                subprocess.run([
-                    "iptables", "-D", "FORWARD",
-                    "-p", "tcp",
-                    "-d", remote_ip,
-                    "--sport", str(local_port),
-                    "--dport", str(remote_port),
-                    "--tcp-flags", flag, flagstr,
-                    "-j", "DROP"
-                ], check=True)
+            # for flag, flagstr in [("ACK", "ACK"), ("RST", "RST"), ("FIN,PSH,ACK", "FIN,PSH,ACK"), ("FIN,ACK", "FIN,ACK")]:
+            #     subprocess.run([
+            #         "iptables", "-D", "FORWARD",
+            #         "-p", "tcp",
+            #         "-d", remote_ip,
+            #         "--sport", str(local_port),
+            #         "--dport", str(remote_port),
+            #         "--tcp-flags", flag, flagstr,
+            #         "-j", "DROP"
+            #     ], check=True)
+            subprocess.run([
+                "iptables", "-D", "FORWARD",
+                "-p", "tcp",
+                "-d", remote_ip,
+                "--sport", str(local_port),
+                "--dport", str(remote_port),
+                "-j", "DROP"
+            ], check=True)
             subprocess.run([
                 "iptables", "-D", "FORWARD",
                 "-p", "tcp",
