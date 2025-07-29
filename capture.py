@@ -297,7 +297,8 @@ def packet_callback(pkt):
                 # 受信パケットがACKで、ack番号がhelp_packet_seq+len(0400e228)を指していればOK
                 # 0400e228は4バイト
                 expected_ack = (help_packet_seq or 0) + 4
-                if pkt[TCP].flags & 0x10 and pkt[TCP].ack == expected_ack:
+                # if pkt[TCP].flags & 0x10 and pkt[TCP].ack == expected_ack:
+                if pkt[TCP].ack == expected_ack:
                     print("[help.txt] 0400e228 ACK received!")
                     help_packet_pending = False
                     help_packet_seq = None
