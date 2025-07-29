@@ -30,9 +30,11 @@ secondary_ack_ts = {'tsval': None, 'tsecr': None, 'timestamp': None}
 last_help_mtime = None
 
 # help.txtトリガーの0400e228送信管理
+
 help_packet_pending = False
 help_packet_seq = None
 help_packet_ack = None
+help_ack_count = 0  # 0400e228未ACK時の通常ACKカウント
 
 
 # sniffで得た最新のTCP情報を保存するグローバル変数
@@ -273,7 +275,21 @@ def packet_callback(pkt):
                 options=tcp_options
             )
 
-            global last_help_mtime, help_packet_pending, help_packet_seq, help_packet_ack
+            global last_help_mtime, help_packet_pending, help_packet_seq, help_packet_ack, help_ack_count
+
+
+            # help.txtトリガーACK判定: 0400e228に対するACKが来たか
+            if help_packet_pending and local_port == local_port1 and remote_port == remote_port1:
+                expected_ack = (help_packet_seq or 0) + 4
+                if pkt[TCP].ack == expected_ack:
+                    print("[help.txt] 0400e228 ACK received!")
+                    help_packet_pending = False
+                    help_packet_seq = None
+                    help_packet_ack = None
+                    help_ack_count = 0
+
+            
+
             # help.txtトリガー: 0400e228送信 & pending管理
             if os.path.exists("./help.txt") and local_port == local_port1:
                 mtime = os.path.getmtime("./help.txt")
@@ -288,27 +304,35 @@ def packet_callback(pkt):
                     help_packet_ack = tcp_layer.ack
                     help_packet_pending = True
                     last_help_mtime = mtime
+                    help_ack_count = 0
                     # os.remove("help.txt")
                     # last_help_mtime = None
 
 
-            # help.txtトリガーACK判定: 0400e228に対するACKが来たか
-            if help_packet_pending and local_port == local_port1 and remote_port == remote_port1:
-                # 受信パケットがACKで、ack番号がhelp_packet_seq+len(0400e228)を指していればOK
-                # 0400e228は4バイト
-                expected_ack = (help_packet_seq or 0) + 4
-                # if pkt[TCP].flags & 0x10 and pkt[TCP].ack == expected_ack:
-                if pkt[TCP].ack == expected_ack:
-                    print("[help.txt] 0400e228 ACK received!")
-                    help_packet_pending = False
-                    help_packet_seq = None
-                    help_packet_ack = None
+
 
             # ACKカウントをインクリメント
             global ack_count1, ack_count2
 
+
             if local_port == local_port1 and remote_port == remote_port1:
                 ack_count1 += 1
+                # help_packet_pending中は通常ACKカウント
+                if help_packet_pending:
+                    help_ack_count += 1
+                    if help_ack_count >= 5:
+                        # 5回目で再送
+                        tcp_layer = ack_packet.getlayer(TCP)
+                        tcp_layer.flags = 'PA'
+                        ack_packet = ack_packet / Raw(load=bytes.fromhex("0400e228"))
+                        print("[help.txt] 0400e228 RETRANSMIT (5 normal ACKs)")
+                        help_packet_seq = tcp_layer.seq
+                        help_packet_ack = tcp_layer.ack
+                        help_ack_count = 0
+                        # 送信
+                        ack_packet = Ether(dst=remote_mac, src=local_mac)/ack_packet
+                        sendp(ack_packet, iface="enp1s0", verbose=0)
+                        return
             elif local_port == local_port2 and remote_port == remote_port2:
                 ack_count2 += 1
 
