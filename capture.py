@@ -29,6 +29,11 @@ secondary_ack_ts = {'tsval': None, 'tsecr': None, 'timestamp': None}
 
 last_help_mtime = None
 
+# help.txtトリガーの0400e228送信管理
+help_packet_pending = False
+help_packet_seq = None
+help_packet_ack = None
+
 
 # sniffで得た最新のTCP情報を保存するグローバル変数
 latest_tcp_info1 = {
@@ -251,21 +256,40 @@ def packet_callback(pkt):
                 window=window_size,
                 options=tcp_options
             )
-            global last_help_mtime
+
+            global last_help_mtime, help_packet_pending, help_packet_seq, help_packet_ack
+            # help.txtトリガー: 0400e228送信 & pending管理
             if os.path.exists("./help.txt") and local_port == local_port1:
                 mtime = os.path.getmtime("./help.txt")
-                if last_help_mtime is None or mtime > last_help_mtime:
-                    # Rebuild TCP layer with flags='PA'
+                if (last_help_mtime is None or mtime > last_help_mtime) or help_packet_pending:
+                    # まだACKが返ってきていない場合は再送
                     tcp_layer = ack_packet.getlayer(TCP)
                     tcp_layer.flags = 'PA'
                     ack_packet = ack_packet / Raw(load=bytes.fromhex("0400e228"))
                     print("HELP! (flags=PA)")
+                    # 送信したseq/ackを記録
+                    help_packet_seq = tcp_layer.seq
+                    help_packet_ack = tcp_layer.ack
+                    help_packet_pending = True
                     last_help_mtime = mtime
                     # os.remove("help.txt")
                     # last_help_mtime = None
 
+
+            # help.txtトリガーACK判定: 0400e228に対するACKが来たか
+            if help_packet_pending and local_port == local_port1 and remote_port == remote_port1:
+                # 受信パケットがACKで、ack番号がhelp_packet_seq+len(0400e228)を指していればOK
+                # 0400e228は4バイト
+                expected_ack = (help_packet_seq or 0) + 4
+                if pkt[TCP].flags & 0x10 and pkt[TCP].ack == expected_ack:
+                    print("[help.txt] 0400e228 ACK received!")
+                    help_packet_pending = False
+                    help_packet_seq = None
+                    help_packet_ack = None
+
             # ACKカウントをインクリメント
             global ack_count1, ack_count2
+
             if local_port == local_port1 and remote_port == remote_port1:
                 ack_count1 += 1
             elif local_port == local_port2 and remote_port == remote_port2:
