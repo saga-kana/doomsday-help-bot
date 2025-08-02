@@ -289,7 +289,7 @@ def packet_callback(pkt):
                 if help_packet_pending and local_port == local_port1 and remote_port == remote_port1:
                     expected_ack = (help_packet_seq or 0) + 4
                     if pkt[TCP].ack == expected_ack:
-                        print("[help.txt] 0400e228 ACK received!")
+                        print("[help.txt] ACK received!")
                         help_packet_pending = False
                         help_packet_seq = None
                         help_packet_ack = None
@@ -305,7 +305,7 @@ def packet_callback(pkt):
                         tcp_layer = ack_packet.getlayer(TCP)
                         tcp_layer.flags = 'PA'
                         ack_packet = ack_packet / Raw(load=bytes.fromhex("0400e228"))
-                        print("HELP! (flags=PA)")
+                        print(f"HELP! (flags=PA) {time.strftime('%Y-%m-%d %H:%M:%S')} [{time.time():.3f}]")
                         # 送信したseq/ackを記録
                         help_packet_seq = tcp_layer.seq
                         help_packet_ack = tcp_layer.ack
