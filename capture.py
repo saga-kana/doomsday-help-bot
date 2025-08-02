@@ -289,7 +289,7 @@ def packet_callback(pkt):
                 if help_packet_pending and local_port == local_port1 and remote_port == remote_port1:
                     expected_ack = (help_packet_seq or 0) + 4
                     if pkt[TCP].ack == expected_ack:
-                        print("[help.txt] ACK received!")
+                        print(f"[help.txt] ACK RECV! {time.strftime('%Y-%m-%d %H:%M:%S')}")
                         help_packet_pending = False
                         help_packet_seq = None
                         help_packet_ack = None
@@ -305,7 +305,7 @@ def packet_callback(pkt):
                         tcp_layer = ack_packet.getlayer(TCP)
                         tcp_layer.flags = 'PA'
                         ack_packet = ack_packet / Raw(load=bytes.fromhex("0400e228"))
-                        print(f"HELP! (flags=PA) {time.strftime('%Y-%m-%d %H:%M:%S')} [{time.time():.3f}]")
+                        print(f"HELP!(PA) {time.strftime('%Y-%m-%d %H:%M:%S')}")
                         # 送信したseq/ackを記録
                         help_packet_seq = tcp_layer.seq
                         help_packet_ack = tcp_layer.ack
@@ -456,7 +456,8 @@ def periodic_psh_sender2():
     global ack_count2
     while True:
         if latest_tcp_info2['psh_sent']:
-            if ack_count2 >= 1:
+            # 2側で何か失敗したときは送る（periodicにackが返ってこなかった）
+            if ack_count2 >= 1 or ack_count1 >= 1:
                 time.sleep(15)
                 with latest_tcp_info_lock:
                     # TCP options (NOP,NOP,Timestamp) 計算
