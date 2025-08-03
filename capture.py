@@ -217,7 +217,7 @@ def packet_callback(pkt):
                     latest_tcp_info1['sport'] = local_port
                     latest_tcp_info1['dport'] = remote_port
                     latest_tcp_info1['seq'] = pkt[TCP].ack
-                    latest_tcp_info1['ack'] = pkt[TCP].seq + len(pkt[TCP].payload)
+                    latest_tcp_info1['ack'] = (pkt[TCP].seq + len(pkt[TCP].payload)) & 0xFFFFFFFF
                     latest_tcp_info1['ttl'] = pkt[IP].ttl
                     latest_tcp_info1['ip_options'] = pkt[IP].options
                     latest_tcp_info1['tcp_window'] = pkt[TCP].window if hasattr(pkt[TCP], 'window') else window_size
@@ -228,7 +228,7 @@ def packet_callback(pkt):
                     latest_tcp_info2['sport'] = local_port
                     latest_tcp_info2['dport'] = remote_port
                     latest_tcp_info2['seq'] = pkt[TCP].ack
-                    latest_tcp_info2['ack'] = pkt[TCP].seq + len(pkt[TCP].payload)
+                    latest_tcp_info2['ack'] = (pkt[TCP].seq + len(pkt[TCP].payload)) & 0xFFFFFFFF
                     latest_tcp_info2['ttl'] = pkt[IP].ttl
                     latest_tcp_info2['ip_options'] = pkt[IP].options
                     latest_tcp_info2['tcp_window'] = pkt[TCP].window if hasattr(pkt[TCP], 'window') else window_size
@@ -262,7 +262,10 @@ def packet_callback(pkt):
                 if tsval is not None and tsecr is not None:
                     tcp_options = [('NOP', None), ('NOP', None), ('Timestamp', (tsval, tsecr))]
                 elif tsval is not None and tsecr is None:
-                    tcp_options = [('NOP', None), ('NOP', None), ('Timestamp', (tsval, tsecr))] # tsecrがNoneのときも送ってみる
+                    # tcp_options = [('NOP', None), ('NOP', None), ('Timestamp', (tsval, tsecr))] # tsecrがNoneのときも送ってみる
+                    print(f"⚠️ Warning: TSecr is None, TSval={tsval}, TSecr={tsecr} | {time.strftime('%Y-%m-%d %H:%M:%S')}")
+                    pkt.show()
+                    tcp_options = []
                 else:
                     # tcp_options = pkt[TCP].options
                     tcp_options = []
@@ -276,7 +279,7 @@ def packet_callback(pkt):
                     sport=local_port,
                     dport=remote_port,
                     seq=pkt[TCP].ack,
-                    ack=pkt[TCP].seq + len(pkt[TCP].payload),
+                    ack=(pkt[TCP].seq + len(pkt[TCP].payload)) & 0xFFFFFFFF,
                     flags='A',
                     window=window_size,
                     options=tcp_options
@@ -558,10 +561,40 @@ def debug_packet_callback(pkt):
 threading.Thread(target=periodic_psh_sender1, daemon=True).start()
 threading.Thread(target=periodic_psh_sender2, daemon=True).start()
 
-sniff(iface="enp1s0", filter=f"tcp and ip dst {remote_ip}", prn=debug_packet_callback, stop_filter=make_ack_filter(local_port1, remote_port1), store=0)
-sniff(iface="enp1s0", filter=f"tcp and ip dst {remote_ip}", prn=debug_packet_callback, stop_filter=make_ack_filter(local_port2, remote_port2), store=0)
-        
-# sys.exit(0)
+sniff1_done = threading.Event()
+sniff2_done = threading.Event()
+
+def sniff1_wrapper():
+    sniff(
+        iface="enp1s0",
+        filter=f"tcp and ip dst {remote_ip}",
+        prn=debug_packet_callback,
+        stop_filter=make_ack_filter(local_port1, remote_port1),
+        store=0
+    )
+    sniff1_done.set()
+
+def sniff2_wrapper():
+    sniff(
+        iface="enp1s0",
+        filter=f"tcp and ip dst {remote_ip}",
+        prn=debug_packet_callback,
+        stop_filter=make_ack_filter(local_port2, remote_port2),
+        store=0
+    )
+    sniff2_done.set()
+
+threading.Thread(target=sniff1_wrapper, daemon=True).start()
+threading.Thread(target=sniff2_wrapper, daemon=True).start()
+
+# 両方のsniffが終わるまで待つ
+try:
+    sniff1_done.wait()
+    sniff2_done.wait()
+except KeyboardInterrupt:
+    print("Ctrl+C detected, exiting...")
+    cleanup_iptables()
+    sys.exit(0)
 
 # 初期設定
 setup_iptables()
