@@ -347,6 +347,8 @@ def packet_callback(pkt):
                     # RSTフラグが立っていない場合のみカウント
                     if not (pkt[TCP].flags & 0x04):
                         ack_count2 += 1
+                    else:
+                        ack_count2 = 0
 
                 print(f"✅ ACK sent | TSval={tsval}, TSecr={tsecr}")
                 ack_packet = Ether(dst=remote_mac, src=local_mac)/ack_packet
@@ -460,7 +462,7 @@ def periodic_psh_sender2():
     while True:
         if latest_tcp_info2['psh_sent']:
             # 2側で何か失敗したときは送る（periodicにackが返ってこなかった）
-            if ack_count2 >= 1 or ack_count1 >= 1:
+            if ack_count2 >= 1:
                 time.sleep(15)
                 with latest_tcp_info_lock:
                     # TCP options (NOP,NOP,Timestamp) 計算
