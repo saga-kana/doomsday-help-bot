@@ -213,7 +213,7 @@ def packet_callback(pkt):
             global latest_tcp_info2
             if local_port == local_port1 and remote_port == remote_port1:
                 # with latest_tcp_info_lock1:
-                acquired = latest_tcp_info_lock1.acuire(blocking=False)
+                acquired = latest_tcp_info_lock1.acquire(blocking=False)
                 try:
                     latest_tcp_info1['src_ip'] = pkt[IP].dst
                     latest_tcp_info1['dst_ip'] = pkt[IP].src
