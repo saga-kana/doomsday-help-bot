@@ -32,23 +32,23 @@ sudo tcpdump -i waydroid0 -n -tt -l dst host 204.141.172.10 | awk  'BEGIN {
 ```
 # HELP.txt
 ```
-sudo tcpdump -i waydroid0 -n -tt -l dst host 204.141.172.10 | awk  '/0x[0-9a-f]+:/ {   
-    for (i = 2; i <= NF; i++) {     
-        hex = hex $i;   
-    } 
-} 
-/length/ {   
-    if (hex ~ /0400e228/ ) {     
-        system("touch help.txt");     
-        print "match found: 0400e228 → help.txt 作成済み" > "/dev/stderr"   
-    }   
-    hex = ""; 
+sudo tcpdump -i waydroid0 -n -tt -l dst host 204.141.172.10 -X | TZ=Asia/Tokyo  awk  '/0x[0-9a-f]+:/ {
+    for (i = 2; i <= NF; i++) {
+        hex = hex $i;
+    }
+}
+/length/ {
+    if (hex ~ /0400e228/ ) {
+        system("touch help.txt");
+        print "match found: 0400e228 → help.txt 作成済み",strftime("%Y-%m-%d %H:%M:%S")
+    }
+    hex = "";
 }'
 ```
 
-# ログ確認
+# ログ出力
 ```
-tmux pipe-pane -t 8 'cat >> /tmp/tmux_8.log'
+tmux pipe-pane -t manage:0 "cat >> /tmp/help.log"
 ```
 
 

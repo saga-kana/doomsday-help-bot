@@ -12,7 +12,7 @@ remote_mac = "00:00:17:4b:6f:6e"
 local_mac = "02:00:17:02:d2:fe"
 remote_ip = "204.141.172.10"
 local_ip = "10.1.0.92" # enp1s0のIPアドレス
-window_size = 2000
+window_size = 53374
 ttl = 63
 local_port1 = int(sys.argv[1])
 remote_port1 = int(sys.argv[2]) # 11531
@@ -299,17 +299,6 @@ def packet_callback(pkt):
             global last_help_mtime, help_packet_pending, help_packet_seq, help_packet_ack, help_ack_count
 
 
-            # help.txtトリガーACK判定: 0400e228に対するACKが来たか
-            if help_packet_pending and local_port == local_port1 and remote_port == remote_port1:
-                expected_ack = (help_packet_seq or 0) + 4
-                if pkt[TCP].ack == expected_ack:
-                    print(f"[help.txt] ACK RECV! {time.strftime('%Y-%m-%d %H:%M:%S')}")
-                    help_packet_pending = False
-                    help_packet_seq = None
-                    help_packet_ack = None
-                    help_ack_count = 0
-
-            
 
             # help.txtトリガー: 0400e228送信 & pending管理
             if os.path.exists("./help.txt") and local_port == local_port1:
@@ -332,34 +321,7 @@ def packet_callback(pkt):
 
 
 
-            # ACKカウントをインクリメント
-            global ack_count1, ack_count2
 
-
-            if local_port == local_port1 and remote_port == remote_port1:
-                ack_count1 += 1
-                # help_packet_pending中は通常ACKカウント
-                # if help_packet_pending:
-                #     help_ack_count += 1
-                #     if help_ack_count >= help_ack_count_threshold:
-                #         # help_ack_count_threshold回目で再送
-                #         tcp_layer = ack_packet.getlayer(TCP)
-                #         tcp_layer.flags = 'PA'
-                #         ack_packet = ack_packet / Raw(load=bytes.fromhex("0400e228"))
-                #         print("[help.txt] 0400e228 RETRANSMIT (help_ack_count_threshold normal ACKs)")
-                #         help_packet_seq = tcp_layer.seq
-                #         help_packet_ack = tcp_layer.ack
-                #         help_ack_count = 0
-                #         # 送信
-                #         ack_packet = Ether(dst=remote_mac, src=local_mac)/ack_packet
-                #         sendp(ack_packet, iface="enp1s0", verbose=0)
-                #         return
-            elif local_port == local_port2 and remote_port == remote_port2:
-                # RSTフラグが立っていない場合のみカウント
-                if not (pkt[TCP].flags & 0x04):
-                    ack_count2 += 1
-                else:
-                    ack_count2 = 0
 
             print(f"✅ ACK sent | TSval={tsval}, TSecr={tsecr}")
             ack_packet = Ether(dst=remote_mac, src=local_mac)/ack_packet
@@ -368,51 +330,75 @@ def packet_callback(pkt):
             if tcp_options:
                 sendp(ack_packet, iface="enp1s0", verbose=0)
 
+
+            # ACKカウントをインクリメント
+            global ack_count1, ack_count2
+
+            if local_port == local_port1 and remote_port == remote_port1:
+                ack_count1 += 1
+            elif local_port == local_port2 and remote_port == remote_port2:
+                # RSTフラグが立っていない場合のみカウント
+                if not (pkt[TCP].flags & 0x04):
+                    ack_count2 += 1
+                else:
+                    ack_count2 = 0
+
+
+            # help.txtトリガーACK判定: 0400e228に対するACKが来たか
+            if help_packet_pending and local_port == local_port1 and remote_port == remote_port1:
+                expected_ack = (help_packet_seq or 0) + 4
+                if pkt[TCP].ack == expected_ack:
+                    print(f"[help.txt] ACK RECV! {time.strftime('%Y-%m-%d %H:%M:%S')}")
+                    help_packet_pending = False
+                    # help_packet_seq = None
+                    # help_packet_ack = None
+                    # help_ack_count = 0
+
             return
 
             # 最初のPSH-ACKを即時送信（1回だけ、ポートごとに分岐）
-            if sport == src_port1 and dport == dst_port1 and not latest_tcp_info1.get('psh_sent'):
-                psh_packet = IP(
-                    src=latest_tcp_info1['src_ip'],
-                    dst=latest_tcp_info1['dst_ip'],
-                    id=RandShort(),
-                    ttl=pkt[IP].ttl,
-                    options=pkt[IP].options
-                )/TCP(
-                    sport=latest_tcp_info1['sport'],
-                    dport=latest_tcp_info1['dport'],
-                    seq=latest_tcp_info1['seq'],
-                    ack=latest_tcp_info1['ack'],
-                    flags='PA',
-                    window=window_size,
-                    options=tcp_options
-                )/Raw(load=bytes.fromhex("04001627"))
-                # send(psh_packet, iface="enp1s0", verbose=0)
-                psh_packet = Ether(dst=dst_mac)/psh_packet
-                sendp(psh_packet, iface="enp1s0", verbose=0)
-                print(f"[+] First PSH-ACK sent to {latest_tcp_info1['dst_ip']}:{latest_tcp_info1['dport']}")
-                latest_tcp_info1['psh_sent'] = True
-            elif sport == src_port2 and dport == dst_port2 and not latest_tcp_info2.get('psh_sent'):
-                psh_packet = IP(
-                    src=latest_tcp_info2['src_ip'],
-                    dst=latest_tcp_info2['dst_ip'],
-                    id=RandShort(),
-                    ttl=pkt[IP].ttl,
-                    options=pkt[IP].options
-                )/TCP(
-                    sport=latest_tcp_info2['sport'],
-                    dport=latest_tcp_info2['dport'],
-                    seq=latest_tcp_info2['seq'],
-                    ack=latest_tcp_info2['ack'],
-                    flags='PA',
-                    window=window_size,
-                    options=tcp_options
-                )/Raw(load=bytes.fromhex("040058c3"))
-                # send(psh_packet, iface="enp1s0", verbose=0)
-                psh_packet = Ether(dst=dst_mac)/psh_packet
-                sendp(psh_packet, iface="enp1s0", verbose=0)
-                print(f"[+] First PSH-ACK sent to {latest_tcp_info2['dst_ip']}:{latest_tcp_info2['dport']}")
-                latest_tcp_info2['psh_sent'] = True
+            # if sport == src_port1 and dport == dst_port1 and not latest_tcp_info1.get('psh_sent'):
+            #     psh_packet = IP(
+            #         src=latest_tcp_info1['src_ip'],
+            #         dst=latest_tcp_info1['dst_ip'],
+            #         id=RandShort(),
+            #         ttl=pkt[IP].ttl,
+            #         options=pkt[IP].options
+            #     )/TCP(
+            #         sport=latest_tcp_info1['sport'],
+            #         dport=latest_tcp_info1['dport'],
+            #         seq=latest_tcp_info1['seq'],
+            #         ack=latest_tcp_info1['ack'],
+            #         flags='PA',
+            #         window=window_size,
+            #         options=tcp_options
+            #     )/Raw(load=bytes.fromhex("04001627"))
+            #     # send(psh_packet, iface="enp1s0", verbose=0)
+            #     psh_packet = Ether(dst=dst_mac)/psh_packet
+            #     sendp(psh_packet, iface="enp1s0", verbose=0)
+            #     print(f"[+] First PSH-ACK sent to {latest_tcp_info1['dst_ip']}:{latest_tcp_info1['dport']}")
+            #     latest_tcp_info1['psh_sent'] = True
+            # elif sport == src_port2 and dport == dst_port2 and not latest_tcp_info2.get('psh_sent'):
+            #     psh_packet = IP(
+            #         src=latest_tcp_info2['src_ip'],
+            #         dst=latest_tcp_info2['dst_ip'],
+            #         id=RandShort(),
+            #         ttl=pkt[IP].ttl,
+            #         options=pkt[IP].options
+            #     )/TCP(
+            #         sport=latest_tcp_info2['sport'],
+            #         dport=latest_tcp_info2['dport'],
+            #         seq=latest_tcp_info2['seq'],
+            #         ack=latest_tcp_info2['ack'],
+            #         flags='PA',
+            #         window=window_size,
+            #         options=tcp_options
+            #     )/Raw(load=bytes.fromhex("040058c3"))
+            #     # send(psh_packet, iface="enp1s0", verbose=0)
+            #     psh_packet = Ether(dst=dst_mac)/psh_packet
+            #     sendp(psh_packet, iface="enp1s0", verbose=0)
+            #     print(f"[+] First PSH-ACK sent to {latest_tcp_info2['dst_ip']}:{latest_tcp_info2['dport']}")
+            #     latest_tcp_info2['psh_sent'] = True
 
 # タイムスロットでPSH-ACKを送信
 def periodic_psh_sender1():
