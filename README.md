@@ -51,4 +51,8 @@ sudo tcpdump -i waydroid0 -n -tt -l dst host 204.141.172.10 -X | TZ=Asia/Tokyo  
 tmux pipe-pane -t manage:0 "cat >> /tmp/help.log"
 ```
 
-
+# 処理遅延チェック
+```
+sudo tcpdump -i enp1s0 src port ${LOCAL_PORT} -l | awk -F '[: ]+' '{printf "%d %s\n", -($1*3600+$2*60+$3)*1000 + $(NF-4), $
+9}'
+```
