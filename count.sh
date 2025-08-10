@@ -24,7 +24,7 @@ END {
     m = asorti(date_list, sorted_dates)
 
     # ヘッダー出力（時刻横並び）
-    printf "%-12s", "date"
+    printf "%-12s", "date \\ time"
     for (i = 1; i <= n; i++) printf "%5s", sorted_hours[i]
     print ""
 
