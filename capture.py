@@ -192,213 +192,214 @@ def cleanup_iptables():
 
 
 def packet_callback(pkt):
-    if IP in pkt and TCP in pkt and pkt[IP].src == remote_ip:
+    # if IP in pkt and TCP in pkt and pkt[IP].src == remote_ip:
+    if IP in pkt and TCP in pkt:
         # Only process if (sport==local_port1 and dport==remote_port1) or (sport==local_port2 and dport==remote_port2)
         # print(f"🔍 Packet from {pkt[IP].src} to {pkt[IP].dst} on ports {pkt[TCP].sport} -> {pkt[TCP].dport}")
         remote_port = pkt[TCP].sport
         local_port = pkt[TCP].dport
-        if (local_port == local_port1 and remote_port == remote_port1) or (local_port == local_port2 and remote_port == remote_port2):
-            # print(f"\n📦 Received packet from {target_ip}:")
-            # print(f"🔸 Source Port: {sport}")
-            # print(f"🔸 Destination Port: {dport}")
-            print(f"🔍 Packet from {pkt[IP].src} to {pkt[IP].dst} on ports {pkt[TCP].sport} -> {pkt[TCP].dport}, flags={pkt[TCP].flags}, options={pkt[TCP].options}")
 
-            # ペイロードの表示
-            # if Raw in pkt:
-            #     payload = pkt[Raw].load
-            #     print(f"📄 Payload: {payload.hex()}")
+        # sniffでfilterを適用
+        # if (local_port == local_port1 and remote_port == remote_port1) or (local_port == local_port2 and remote_port == remote_port2):
 
-            # 最新のTCP情報を保存（ここだけlockで保護）
-            global latest_tcp_info1
-            global latest_tcp_info2
-            if local_port == local_port1 and remote_port == remote_port1:
-                # with latest_tcp_info_lock1:
-                acquired = latest_tcp_info_lock1.acquire(blocking=False)
-                try:
-                    latest_tcp_info1['src_ip'] = pkt[IP].dst
-                    latest_tcp_info1['dst_ip'] = pkt[IP].src
-                    latest_tcp_info1['sport'] = local_port
-                    latest_tcp_info1['dport'] = remote_port
-                    latest_tcp_info1['seq'] = pkt[TCP].ack
-                    latest_tcp_info1['ack'] = (pkt[TCP].seq + len(pkt[TCP].payload)) & 0xFFFFFFFF
-                    latest_tcp_info1['ttl'] = pkt[IP].ttl
-                    latest_tcp_info1['ip_options'] = pkt[IP].options
-                    latest_tcp_info1['tcp_window'] = pkt[TCP].window if hasattr(pkt[TCP], 'window') else window_size
-                    latest_tcp_info1['tcp_options'] = pkt[TCP].options
-                finally:
-                    if acquired:
-                        latest_tcp_info_lock1.release()
-            elif local_port == local_port2 and remote_port == remote_port2:
-                acquired = latest_tcp_info_lock2.acquire(blocking=False)
-                try:
-                    latest_tcp_info2['src_ip'] = pkt[IP].dst
-                    latest_tcp_info2['dst_ip'] = pkt[IP].src
-                    latest_tcp_info2['sport'] = local_port
-                    latest_tcp_info2['dport'] = remote_port
-                    latest_tcp_info2['seq'] = pkt[TCP].ack
-                    latest_tcp_info2['ack'] = (pkt[TCP].seq + len(pkt[TCP].payload)) & 0xFFFFFFFF
-                    latest_tcp_info2['ttl'] = pkt[IP].ttl
-                    latest_tcp_info2['ip_options'] = pkt[IP].options
-                    latest_tcp_info2['tcp_window'] = pkt[TCP].window if hasattr(pkt[TCP], 'window') else window_size
-                    latest_tcp_info2['tcp_options'] = pkt[TCP].options
-                finally:
-                    if acquired:
-                        latest_tcp_info_lock2.release()
+        # print(f"\n📦 Received packet from {target_ip}:")
+        # print(f"🔸 Source Port: {sport}")
+        # print(f"🔸 Destination Port: {dport}")
+        print(f"🔍 Packet from {pkt[IP].src} to {pkt[IP].dst} on ports {pkt[TCP].sport} -> {pkt[TCP].dport}, flags={pkt[TCP].flags}, options={pkt[TCP].options}")
 
-            # ACKパケットを作成して送信
-            # TS val/ecrの計算
-            tsval = None
-            tsecr = None
-            if local_port == local_port1 and remote_port == remote_port1:
-                # global primary_ack_ts
-                if primary_ack_ts['tsval'] is not None and primary_ack_ts['timestamp'] is not None:
-                    tsval = int(time.time() * 1000 - primary_ack_ts['timestamp'] * 1000 + primary_ack_ts['tsval'])
-                # pktのTCPオプションからtsval抽出
-                if hasattr(pkt[TCP], 'options'):
-                    for opt in pkt[TCP].options:
-                        if isinstance(opt, tuple) and opt[0] == 'Timestamp':
-                            tsecr = opt[1][0]
-                            break
-            elif local_port == local_port2 and remote_port == remote_port2:
-                # global secondary_ack_ts
-                if secondary_ack_ts['tsval'] is not None and secondary_ack_ts['timestamp'] is not None:
-                    tsval = int(time.time() * 1000 - secondary_ack_ts['timestamp'] * 1000 + secondary_ack_ts['tsval'])
-                if hasattr(pkt[TCP], 'options'):
-                    for opt in pkt[TCP].options:
-                        if isinstance(opt, tuple) and opt[0] == 'Timestamp':
-                            tsecr = opt[1][0]
-                            break
-            # TCPオプションを[nop,nop,Timestamp]で明示的に構築
+        # ペイロードの表示
+        # if Raw in pkt:
+        #     payload = pkt[Raw].load
+        #     print(f"📄 Payload: {payload.hex()}")
+
+        # 最新のTCP情報を保存（ここだけlockで保護）
+        global latest_tcp_info1
+        global latest_tcp_info2
+        if local_port == local_port1 and remote_port == remote_port1:
+            # with latest_tcp_info_lock1:
+            acquired = latest_tcp_info_lock1.acquire(blocking=False)
+            try:
+                latest_tcp_info1['src_ip'] = pkt[IP].dst
+                latest_tcp_info1['dst_ip'] = pkt[IP].src
+                latest_tcp_info1['sport'] = local_port
+                latest_tcp_info1['dport'] = remote_port
+                latest_tcp_info1['seq'] = pkt[TCP].ack
+                latest_tcp_info1['ack'] = (pkt[TCP].seq + len(pkt[TCP].payload)) & 0xFFFFFFFF
+                latest_tcp_info1['ttl'] = pkt[IP].ttl
+                latest_tcp_info1['ip_options'] = pkt[IP].options
+                latest_tcp_info1['tcp_window'] = pkt[TCP].window if hasattr(pkt[TCP], 'window') else window_size
+                latest_tcp_info1['tcp_options'] = pkt[TCP].options
+            finally:
+                if acquired:
+                    latest_tcp_info_lock1.release()
+        elif local_port == local_port2 and remote_port == remote_port2:
+            acquired = latest_tcp_info_lock2.acquire(blocking=False)
+            try:
+                latest_tcp_info2['src_ip'] = pkt[IP].dst
+                latest_tcp_info2['dst_ip'] = pkt[IP].src
+                latest_tcp_info2['sport'] = local_port
+                latest_tcp_info2['dport'] = remote_port
+                latest_tcp_info2['seq'] = pkt[TCP].ack
+                latest_tcp_info2['ack'] = (pkt[TCP].seq + len(pkt[TCP].payload)) & 0xFFFFFFFF
+                latest_tcp_info2['ttl'] = pkt[IP].ttl
+                latest_tcp_info2['ip_options'] = pkt[IP].options
+                latest_tcp_info2['tcp_window'] = pkt[TCP].window if hasattr(pkt[TCP], 'window') else window_size
+                latest_tcp_info2['tcp_options'] = pkt[TCP].options
+            finally:
+                if acquired:
+                    latest_tcp_info_lock2.release()
+
+        # ACKパケットを作成して送信
+        # TS val/ecrの計算
+        tsval = None
+        tsecr = None
+        if local_port == local_port1 and remote_port == remote_port1:
+            # global primary_ack_ts
+            if primary_ack_ts['tsval'] is not None and primary_ack_ts['timestamp'] is not None:
+                tsval = int(time.time() * 1000 - primary_ack_ts['timestamp'] * 1000 + primary_ack_ts['tsval'])
+            # pktのTCPオプションからtsval抽出
+            if hasattr(pkt[TCP], 'options'):
+                for opt in pkt[TCP].options:
+                    if isinstance(opt, tuple) and opt[0] == 'Timestamp':
+                        tsecr = opt[1][0]
+                        break
+        elif local_port == local_port2 and remote_port == remote_port2:
+            # global secondary_ack_ts
+            if secondary_ack_ts['tsval'] is not None and secondary_ack_ts['timestamp'] is not None:
+                tsval = int(time.time() * 1000 - secondary_ack_ts['timestamp'] * 1000 + secondary_ack_ts['tsval'])
+            if hasattr(pkt[TCP], 'options'):
+                for opt in pkt[TCP].options:
+                    if isinstance(opt, tuple) and opt[0] == 'Timestamp':
+                        tsecr = opt[1][0]
+                        break
+        # TCPオプションを[nop,nop,Timestamp]で明示的に構築
+        tcp_options = []
+        if tsval is not None and tsecr is not None:
+            tcp_options = [('NOP', None), ('NOP', None), ('Timestamp', (tsval, tsecr))]
+        elif tsval is not None and tsecr is None:
+            # tcp_options = [('NOP', None), ('NOP', None), ('Timestamp', (tsval, tsecr))] # tsecrがNoneのときも送ってみる
+            print(f"⚠️ Warning: TSecr is None, TSval={tsval}, TSecr={tsecr} | {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            pkt.show()
             tcp_options = []
-            if tsval is not None and tsecr is not None:
-                tcp_options = [('NOP', None), ('NOP', None), ('Timestamp', (tsval, tsecr))]
-            elif tsval is not None and tsecr is None:
-                # tcp_options = [('NOP', None), ('NOP', None), ('Timestamp', (tsval, tsecr))] # tsecrがNoneのときも送ってみる
-                print(f"⚠️ Warning: TSecr is None, TSval={tsval}, TSecr={tsecr} | {time.strftime('%Y-%m-%d %H:%M:%S')}")
-                pkt.show()
-                tcp_options = []
+        else:
+            # tcp_options = pkt[TCP].options
+            tcp_options = []
+        ack_packet = IP(
+            src=pkt[IP].dst,
+            dst=pkt[IP].src,
+            id=RandShort(),
+            ttl=ttl,
+            options=pkt[IP].options
+        )/TCP(
+            sport=local_port,
+            dport=remote_port,
+            seq=pkt[TCP].ack,
+            ack=(pkt[TCP].seq + len(pkt[TCP].payload)) & 0xFFFFFFFF,
+            flags='A',
+            window=window_size,
+            options=tcp_options
+        )
+
+        global last_help_mtime, help_packet_pending, help_packet_seq, help_packet_ack, help_ack_count
+
+
+
+        # help.txtトリガー: 0400e228送信 & pending管理
+        if os.path.exists("./help.txt") and local_port == local_port1:
+            mtime = os.path.getmtime("./help.txt")
+            if (last_help_mtime is None or mtime > last_help_mtime):
+                # まだACKが返ってきていない場合は再送
+                tcp_layer = ack_packet.getlayer(TCP)
+                tcp_layer.flags = 'PA'
+                ack_packet = ack_packet / Raw(load=bytes.fromhex("0400e228"))
+                print(f"HELP!(PA) {time.strftime('%Y-%m-%d %H:%M:%S')}")
+                # 送信したseq/ackを記録
+                help_packet_seq = tcp_layer.seq
+                help_packet_ack = tcp_layer.ack
+                help_packet_pending = True
+                last_help_mtime = mtime
+                help_ack_count = 0
+                # os.remove("help.txt")
+                # last_help_mtime = None
+
+
+
+        print(f"✅ ACK sent | TSval={tsval}, TSecr={tsecr}")
+        ack_packet = Ether(dst=remote_mac, src=local_mac)/ack_packet
+
+        # tcp_optionsが空でないときのみ送信
+        if tcp_options:
+            sendp(ack_packet, iface="enp1s0", verbose=0)
+
+
+        # ACKカウントをインクリメント
+        global ack_count1, ack_count2
+
+        if local_port == local_port1 and remote_port == remote_port1:
+            ack_count1 += 1
+        elif local_port == local_port2 and remote_port == remote_port2:
+            # RSTフラグが立っていない場合のみカウント
+            if not (pkt[TCP].flags & 0x04):
+                ack_count2 += 1
             else:
-                # tcp_options = pkt[TCP].options
-                tcp_options = []
-            ack_packet = IP(
-                src=pkt[IP].dst,
-                dst=pkt[IP].src,
-                id=RandShort(),
-                ttl=ttl,
-                options=pkt[IP].options
-            )/TCP(
-                sport=local_port,
-                dport=remote_port,
-                seq=pkt[TCP].ack,
-                ack=(pkt[TCP].seq + len(pkt[TCP].payload)) & 0xFFFFFFFF,
-                flags='A',
-                window=window_size,
-                options=tcp_options
-            )
-
-            global last_help_mtime, help_packet_pending, help_packet_seq, help_packet_ack, help_ack_count
+                ack_count2 = 0
 
 
+        # help.txtトリガーACK判定: 0400e228に対するACKが来たか
+        if help_packet_pending and local_port == local_port1 and remote_port == remote_port1:
+            expected_ack = (help_packet_seq or 0) + 4
+            if pkt[TCP].ack == expected_ack:
+                print(f"[help.txt] ACK RECV! {time.strftime('%Y-%m-%d %H:%M:%S')}")
+                help_packet_pending = False
+                # help_packet_seq = None
+                # help_packet_ack = None
+                # help_ack_count = 0
 
-            # help.txtトリガー: 0400e228送信 & pending管理
-            if os.path.exists("./help.txt") and local_port == local_port1:
-                mtime = os.path.getmtime("./help.txt")
-                if (last_help_mtime is None or mtime > last_help_mtime):
-                    # まだACKが返ってきていない場合は再送
-                    tcp_layer = ack_packet.getlayer(TCP)
-                    tcp_layer.flags = 'PA'
-                    ack_packet = ack_packet / Raw(load=bytes.fromhex("0400e228"))
-                    print(f"HELP!(PA) {time.strftime('%Y-%m-%d %H:%M:%S')}")
-                    # 送信したseq/ackを記録
-                    help_packet_seq = tcp_layer.seq
-                    help_packet_ack = tcp_layer.ack
-                    help_packet_pending = True
-                    last_help_mtime = mtime
-                    help_ack_count = 0
-                    # os.remove("help.txt")
-                    # last_help_mtime = None
+        return
 
-
-
-
-
-
-            print(f"✅ ACK sent | TSval={tsval}, TSecr={tsecr}")
-            ack_packet = Ether(dst=remote_mac, src=local_mac)/ack_packet
-
-            # tcp_optionsが空でないときのみ送信
-            if tcp_options:
-                sendp(ack_packet, iface="enp1s0", verbose=0)
-
-
-            # ACKカウントをインクリメント
-            global ack_count1, ack_count2
-
-            if local_port == local_port1 and remote_port == remote_port1:
-                ack_count1 += 1
-            elif local_port == local_port2 and remote_port == remote_port2:
-                # RSTフラグが立っていない場合のみカウント
-                if not (pkt[TCP].flags & 0x04):
-                    ack_count2 += 1
-                else:
-                    ack_count2 = 0
-
-
-            # help.txtトリガーACK判定: 0400e228に対するACKが来たか
-            if help_packet_pending and local_port == local_port1 and remote_port == remote_port1:
-                expected_ack = (help_packet_seq or 0) + 4
-                if pkt[TCP].ack == expected_ack:
-                    print(f"[help.txt] ACK RECV! {time.strftime('%Y-%m-%d %H:%M:%S')}")
-                    help_packet_pending = False
-                    # help_packet_seq = None
-                    # help_packet_ack = None
-                    # help_ack_count = 0
-
-            return
-
-            # 最初のPSH-ACKを即時送信（1回だけ、ポートごとに分岐）
-            # if sport == src_port1 and dport == dst_port1 and not latest_tcp_info1.get('psh_sent'):
-            #     psh_packet = IP(
-            #         src=latest_tcp_info1['src_ip'],
-            #         dst=latest_tcp_info1['dst_ip'],
-            #         id=RandShort(),
-            #         ttl=pkt[IP].ttl,
-            #         options=pkt[IP].options
-            #     )/TCP(
-            #         sport=latest_tcp_info1['sport'],
-            #         dport=latest_tcp_info1['dport'],
-            #         seq=latest_tcp_info1['seq'],
-            #         ack=latest_tcp_info1['ack'],
-            #         flags='PA',
-            #         window=window_size,
-            #         options=tcp_options
-            #     )/Raw(load=bytes.fromhex("04001627"))
-            #     # send(psh_packet, iface="enp1s0", verbose=0)
-            #     psh_packet = Ether(dst=dst_mac)/psh_packet
-            #     sendp(psh_packet, iface="enp1s0", verbose=0)
-            #     print(f"[+] First PSH-ACK sent to {latest_tcp_info1['dst_ip']}:{latest_tcp_info1['dport']}")
-            #     latest_tcp_info1['psh_sent'] = True
-            # elif sport == src_port2 and dport == dst_port2 and not latest_tcp_info2.get('psh_sent'):
-            #     psh_packet = IP(
-            #         src=latest_tcp_info2['src_ip'],
-            #         dst=latest_tcp_info2['dst_ip'],
-            #         id=RandShort(),
-            #         ttl=pkt[IP].ttl,
-            #         options=pkt[IP].options
-            #     )/TCP(
-            #         sport=latest_tcp_info2['sport'],
-            #         dport=latest_tcp_info2['dport'],
-            #         seq=latest_tcp_info2['seq'],
-            #         ack=latest_tcp_info2['ack'],
-            #         flags='PA',
-            #         window=window_size,
-            #         options=tcp_options
-            #     )/Raw(load=bytes.fromhex("040058c3"))
-            #     # send(psh_packet, iface="enp1s0", verbose=0)
-            #     psh_packet = Ether(dst=dst_mac)/psh_packet
-            #     sendp(psh_packet, iface="enp1s0", verbose=0)
-            #     print(f"[+] First PSH-ACK sent to {latest_tcp_info2['dst_ip']}:{latest_tcp_info2['dport']}")
-            #     latest_tcp_info2['psh_sent'] = True
+        # 最初のPSH-ACKを即時送信（1回だけ、ポートごとに分岐）
+        # if sport == src_port1 and dport == dst_port1 and not latest_tcp_info1.get('psh_sent'):
+        #     psh_packet = IP(
+        #         src=latest_tcp_info1['src_ip'],
+        #         dst=latest_tcp_info1['dst_ip'],
+        #         id=RandShort(),
+        #         ttl=pkt[IP].ttl,
+        #         options=pkt[IP].options
+        #     )/TCP(
+        #         sport=latest_tcp_info1['sport'],
+        #         dport=latest_tcp_info1['dport'],
+        #         seq=latest_tcp_info1['seq'],
+        #         ack=latest_tcp_info1['ack'],
+        #         flags='PA',
+        #         window=window_size,
+        #         options=tcp_options
+        #     )/Raw(load=bytes.fromhex("04001627"))
+        #     # send(psh_packet, iface="enp1s0", verbose=0)
+        #     psh_packet = Ether(dst=dst_mac)/psh_packet
+        #     sendp(psh_packet, iface="enp1s0", verbose=0)
+        #     print(f"[+] First PSH-ACK sent to {latest_tcp_info1['dst_ip']}:{latest_tcp_info1['dport']}")
+        #     latest_tcp_info1['psh_sent'] = True
+        # elif sport == src_port2 and dport == dst_port2 and not latest_tcp_info2.get('psh_sent'):
+        #     psh_packet = IP(
+        #         src=latest_tcp_info2['src_ip'],
+        #         dst=latest_tcp_info2['dst_ip'],
+        #         id=RandShort(),
+        #         ttl=pkt[IP].ttl,
+        #         options=pkt[IP].options
+        #     )/TCP(
+        #         sport=latest_tcp_info2['sport'],
+        #         dport=latest_tcp_info2['dport'],
+        #         seq=latest_tcp_info2['seq'],
+        #         ack=latest_tcp_info2['ack'],
+        #         flags='PA',
+        #         window=window_size,
+        #         options=tcp_options
+        #     )/Raw(load=bytes.fromhex("040058c3"))
+        #     # send(psh_packet, iface="enp1s0", verbose=0)
+        #     psh_packet = Ether(dst=dst_mac)/psh_packet
+        #     sendp(psh_packet, iface="enp1s0", verbose=0)
+        #     print(f"[+] First PSH-ACK sent to {latest_tcp_info2['dst_ip']}:{latest_tcp_info2['dport']}")
+        #     latest_tcp_info2['psh_sent'] = True
 
 # タイムスロットでPSH-ACKを送信
 def periodic_psh_sender1():
@@ -604,4 +605,9 @@ atexit.register(cleanup_iptables)
 
 print(f"🔍 Capturing packets from {remote_ip} on enp1s0... (Press Ctrl+C to stop)")
 # パケットをキャプチャ (パケットは自動的に破棄される)
-sniff(iface="enp1s0", filter=f"tcp and ip src {remote_ip}", prn=packet_callback, store=0)
+sniff(
+    iface="enp1s0",
+    filter=f"tcp and ip src {remote_ip} and (dst port {local_port1} or dst port {local_port2})",
+    prn=packet_callback,
+    store=0
+)
