@@ -76,6 +76,18 @@ def setup_iptables():
     # FORWARD: ACK, RST, FINいずれかのフラグが立っているパケットをドロップ
     # Only add rules for (local_port1, remote_port1) and (local_port2, remote_port2)
     for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
+        # for flag, flagstr in [("SYN", "SYN"), ("ACK", "ACK"), ("ACK,PSH", "ACK,PSH"), ("RST", "RST"), ("FIN", "FIN")]:
+        # for flag, flagstr in [("ACK,PSH", "ACK"), ("RST", "RST"), ("FIN,PSH,ACK", "FIN,PSH,ACK"), ("FIN,ACK", "FIN,ACK")]:
+        # for flag, flagstr in [("ACK", "ACK"), ("RST", "RST"), ("FIN,PSH,ACK", "FIN,PSH,ACK"), ("FIN,ACK", "FIN,ACK")]:
+        #     subprocess.run([
+        #         "iptables", "-I", "FORWARD",
+        #         "-p", "tcp",
+        #         "-d", remote_ip,
+        #         "--sport", str(local_port),
+        #         "--dport", str(remote_port),
+        #         "--tcp-flags", flag, flagstr,
+        #         "-j", "DROP"
+        #     ], check=True)
         subprocess.run([
             "iptables", "-I", "FORWARD",
             "-p", "tcp",
@@ -93,6 +105,27 @@ def setup_iptables():
             "-j", "DROP"
         ], check=True)
     
+    # for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
+    #     # IN
+    #     subprocess.run([
+    #         "iptables", "-I", "INPUT",
+    #         "-p", "tcp",
+    #         "-d", local_ip,
+    #         "--dport", str(local_port),
+    #         "-s", remote_ip,
+    #         "--sport", str(remote_port),
+    #         "-j", "ACCEPT"
+    #     ], check=True)
+    #     # OUT
+    #     subprocess.run([
+    #         "iptables", "-I", "INPUT",
+    #         "-p", "tcp",
+    #         "-s", local_ip,
+    #         "--sport", str(local_port),
+    #         "-d", remote_ip,
+    #         "--dport", str(remote_port),
+    #         "-j", "ACCEPT"
+    #     ], check=True)
     print("✅ Packet dropping rules installed")
 
 # プログラム終了時にiptablesルールを削除
@@ -103,6 +136,18 @@ def cleanup_iptables():
         
         # Only remove rules for (local_port1, remote_port1) and (local_port2, remote_port2)
         for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
+            # for flag, flagstr in [("SYN", "SYN"), ("ACK", "ACK"), ("ACK,PSH", "ACK,PSH"), ("RST", "RST"), ("FIN", "FIN")]:
+            # for flag, flagstr in [("ACK,PSH", "ACK"), ("RST", "RST"), ("FIN,PSH,ACK", "FIN,PSH,ACK"), ("FIN,ACK", "FIN,ACK")]:
+            # for flag, flagstr in [("ACK", "ACK"), ("RST", "RST"), ("FIN,PSH,ACK", "FIN,PSH,ACK"), ("FIN,ACK", "FIN,ACK")]:
+            #     subprocess.run([
+            #         "iptables", "-D", "FORWARD",
+            #         "-p", "tcp",
+            #         "-d", remote_ip,
+            #         "--sport", str(local_port),
+            #         "--dport", str(remote_port),
+            #         "--tcp-flags", flag, flagstr,
+            #         "-j", "DROP"
+            #     ], check=True)
             subprocess.run([
                 "iptables", "-D", "FORWARD",
                 "-p", "tcp",
@@ -120,6 +165,25 @@ def cleanup_iptables():
                 "-j", "DROP"
             ], check=True)
 
+        # for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
+        #     subprocess.run([
+        #         "iptables", "-D", "INPUT",
+        #         "-p", "tcp",
+        #         "-d", local_ip,
+        #         "--dport", str(local_port),
+        #         "-s", remote_ip,
+        #         "--sport", str(remote_port),
+        #         "-j", "ACCEPT"
+        #     ], check=True)
+        #     subprocess.run([
+        #         "iptables", "-D", "INPUT",
+        #         "-p", "tcp",
+        #         "-s", local_ip,
+        #         "--sport", str(local_port),
+        #         "-d", remote_ip,
+        #         "--dport", str(remote_port),
+        #         "-j", "ACCEPT"
+        #     ], check=True)
         print("✅ Packet dropping rules removed")
     except subprocess.CalledProcessError:
         print("⚠️ Error removing iptables rules")
@@ -293,6 +357,49 @@ def packet_callback(pkt):
 
         return
 
+        # 最初のPSH-ACKを即時送信（1回だけ、ポートごとに分岐）
+        # if sport == src_port1 and dport == dst_port1 and not latest_tcp_info1.get('psh_sent'):
+        #     psh_packet = IP(
+        #         src=latest_tcp_info1['src_ip'],
+        #         dst=latest_tcp_info1['dst_ip'],
+        #         id=RandShort(),
+        #         ttl=pkt[IP].ttl,
+        #         options=pkt[IP].options
+        #     )/TCP(
+        #         sport=latest_tcp_info1['sport'],
+        #         dport=latest_tcp_info1['dport'],
+        #         seq=latest_tcp_info1['seq'],
+        #         ack=latest_tcp_info1['ack'],
+        #         flags='PA',
+        #         window=window_size,
+        #         options=tcp_options
+        #     )/Raw(load=bytes.fromhex("04001627"))
+        #     # send(psh_packet, iface="enp1s0", verbose=0)
+        #     psh_packet = Ether(dst=dst_mac)/psh_packet
+        #     sendp(psh_packet, iface="enp1s0", verbose=0)
+        #     print(f"[+] First PSH-ACK sent to {latest_tcp_info1['dst_ip']}:{latest_tcp_info1['dport']}")
+        #     latest_tcp_info1['psh_sent'] = True
+        # elif sport == src_port2 and dport == dst_port2 and not latest_tcp_info2.get('psh_sent'):
+        #     psh_packet = IP(
+        #         src=latest_tcp_info2['src_ip'],
+        #         dst=latest_tcp_info2['dst_ip'],
+        #         id=RandShort(),
+        #         ttl=pkt[IP].ttl,
+        #         options=pkt[IP].options
+        #     )/TCP(
+        #         sport=latest_tcp_info2['sport'],
+        #         dport=latest_tcp_info2['dport'],
+        #         seq=latest_tcp_info2['seq'],
+        #         ack=latest_tcp_info2['ack'],
+        #         flags='PA',
+        #         window=window_size,
+        #         options=tcp_options
+        #     )/Raw(load=bytes.fromhex("040058c3"))
+        #     # send(psh_packet, iface="enp1s0", verbose=0)
+        #     psh_packet = Ether(dst=dst_mac)/psh_packet
+        #     sendp(psh_packet, iface="enp1s0", verbose=0)
+        #     print(f"[+] First PSH-ACK sent to {latest_tcp_info2['dst_ip']}:{latest_tcp_info2['dport']}")
+        #     latest_tcp_info2['psh_sent'] = True
 
 # タイムスロットでPSH-ACKを送信
 def periodic_psh_sender1():
@@ -446,7 +553,10 @@ def debug_packet_callback(pkt):
     if IP in pkt and TCP in pkt:
         print(f"DEBUG: Packet from {pkt[IP].src}:{pkt[TCP].sport} to {pkt[IP].dst}:{pkt[TCP].dport}, flags={pkt[TCP].flags}, seq={pkt[TCP].seq}, ack={pkt[TCP].ack}")
 
-
+# local_port1 = 0
+# remote_port1 = 0 # 11531
+# local_port2 = 0
+# remote_port2 = 0 # 11538
 
 
 # バックグラウンドでタイムスロット送信を開始

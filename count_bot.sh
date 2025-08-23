@@ -14,6 +14,5 @@ do
     # echo "--------------------" ;
     # echo ; 
 done ; 
-echo ; 
 
 # cat /tmp/help.log | awk "{print \$(NF-1),\$(NF)}" | sed -e "s/:.*:.*//" | uniq -c | tail -7
