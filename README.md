@@ -56,3 +56,24 @@ tmux pipe-pane -t manage:0 "cat >> /tmp/help.log"
 sudo tcpdump -i enp1s0 src port ${LOCAL_PORT} -l | awk -F '[: ]+' '{printf "%d %s\n", -($1*3600+$2*60+$3)*1000 + $(NF-4), $
 9}'
 ```
+
+# インタフェース切り替え
+```
+# 既存のwaydroid NATルールを削除
+sudo iptables -t nat -D POSTROUTING -s 192.168.240.0/24 ! -o waydroid0 -j MASQUERADE
+
+# enp0s3インターフェース指定でNATルールを追加
+sudo iptables -t nat -A POSTROUTING -s 192.168.240.0/24 -o enp0s3 -j MASQUERADE
+
+# interface指定しない
+sudo iptables -t nat -A POSTROUTING -s 192.168.240.0/24 -j MASQUERADE
+
+```
+
+```
+# waydroid0からのトラフィック用のルーティングルールを追加
+sudo ip rule add from 192.168.240.0/24 table main
+
+# interfaceを戻す
+sudo ip rule del from 192.168.240.0/24 table main
+```

@@ -8,10 +8,17 @@ import atexit
 import sys, os
 
 # ターゲットIP
-remote_mac = "00:00:17:4b:6f:6e"
-local_mac = "02:00:17:02:d2:fe"
+
 remote_ip = "204.141.172.32" # [204.141.172.10, ]
-local_ip = "10.1.0.92" # enp1s0のIPアドレス
+
+# interface = "enp1s0"
+# remote_mac = "00:00:17:4b:6f:6e" # enp1s0
+# local_mac = "02:00:17:02:d2:fe" # enp1s0
+# local_ip = "10.1.0.92" # enp1s0
+interface = "enp0s3"
+remote_mac = "00:00:17:f2:f0:c1" # enp0s3
+local_mac = "02:00:17:00:f4:b2" # enp0s3
+local_ip = "10.0.0.68" # enp0s3
 window_size = 53374
 ttl = 63
 local_port1 = int(sys.argv[1])
@@ -265,7 +272,7 @@ def packet_callback(pkt):
 
         # tcp_optionsが空でないときのみ送信
         if tcp_options:
-            sendp(ack_packet, iface="enp1s0", verbose=0)
+            sendp(ack_packet, iface=interface, verbose=0)
 
 
         # ACKカウントをインクリメント
@@ -339,7 +346,7 @@ def periodic_psh_sender1():
                         options=tcp_options
                     )/Raw(load=bytes.fromhex("04001627"))
                     psh_packet = Ether(dst=remote_mac, src=local_mac)/psh_packet
-                    sendp(psh_packet, iface="enp1s0", verbose=0)
+                    sendp(psh_packet, iface=interface, verbose=0)
                     print(f"[+] Periodic PSH-ACK sent to {latest_tcp_info1['dst_ip']}:{latest_tcp_info1['dport']} | TSval={tsval}, TSecr={tsecr}")
                     ack_count1 = 0
             else:
@@ -390,7 +397,7 @@ def periodic_psh_sender2():
                         options=tcp_options
                     )/Raw(load=bytes.fromhex("040058c3"))
                     psh_packet = Ether(dst=remote_mac, src=local_mac)/psh_packet
-                    sendp(psh_packet, iface="enp1s0", verbose=0)
+                    sendp(psh_packet, iface=interface, verbose=0)
                     print(f"[+] Periodic PSH-ACK sent to {latest_tcp_info2['dst_ip']}:{latest_tcp_info2['dport']} | TSval={tsval}, TSecr={tsecr}")
                     ack_count2 = 0
             else:
@@ -458,7 +465,7 @@ sniff2_done = threading.Event()
 
 def sniff1_wrapper():
     sniff(
-        iface="enp1s0",
+        iface=interface,
         filter=f"tcp and ip dst {remote_ip}",
         prn=debug_packet_callback,
         stop_filter=make_ack_filter(local_port1, remote_port1),
@@ -468,7 +475,7 @@ def sniff1_wrapper():
 
 def sniff2_wrapper():
     sniff(
-        iface="enp1s0",
+        iface=interface,
         filter=f"tcp and ip dst {remote_ip}",
         prn=debug_packet_callback,
         stop_filter=make_ack_filter(local_port2, remote_port2),
@@ -493,10 +500,10 @@ setup_iptables()
 atexit.register(cleanup_iptables)
 
 
-print(f"🔍 Capturing packets from {remote_ip} on enp1s0... (Press Ctrl+C to stop)")
+print(f"🔍 Capturing packets from {remote_ip} on {interface}... (Press Ctrl+C to stop)")
 # パケットをキャプチャ (パケットは自動的に破棄される)
 sniff(
-    iface="enp1s0",
+    iface=interface,
     filter=f"tcp and ip src {remote_ip} and ((dst port {local_port1} and src port {remote_port1}) or (dst port {local_port2} and src port {remote_port2}))",
     prn=packet_callback,
     store=0
