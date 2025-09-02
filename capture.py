@@ -19,6 +19,7 @@ interface = "enp0s3"
 remote_mac = "00:00:17:f2:f0:c1" # enp0s3
 local_mac = "02:00:17:00:f4:b2" # enp0s3
 local_ip = "10.0.0.68" # enp0s3
+iptable = "ts-forward"
 window_size = 53374
 ttl = 63
 local_port1 = int(sys.argv[1])
@@ -84,7 +85,7 @@ def setup_iptables():
     # Only add rules for (local_port1, remote_port1) and (local_port2, remote_port2)
     for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
         subprocess.run([
-            "iptables", "-I", "FORWARD",
+            "iptables", "-I", iptable,
             "-p", "tcp",
             "-d", remote_ip,
             "--sport", str(local_port),
@@ -92,7 +93,7 @@ def setup_iptables():
             "-j", "DROP"
         ], check=True)
         subprocess.run([
-            "iptables", "-I", "FORWARD",
+            "iptables", "-I", iptable,
             "-p", "tcp",
             "-s", remote_ip,
             "--dport", str(local_port),
@@ -111,7 +112,7 @@ def cleanup_iptables():
         # Only remove rules for (local_port1, remote_port1) and (local_port2, remote_port2)
         for local_port, remote_port  in [(local_port1, remote_port1), (local_port2, remote_port2)]:
             subprocess.run([
-                "iptables", "-D", "FORWARD",
+                "iptables", "-D", iptable,
                 "-p", "tcp",
                 "-d", remote_ip,
                 "--sport", str(local_port),
@@ -119,7 +120,7 @@ def cleanup_iptables():
                 "-j", "DROP"
             ], check=True)
             subprocess.run([
-                "iptables", "-D", "FORWARD",
+                "iptables", "-D", iptable,
                 "-p", "tcp",
                 "-s", remote_ip,
                 "--dport", str(local_port),
