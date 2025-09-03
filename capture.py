@@ -9,17 +9,24 @@ import sys, os
 
 # ターゲットIP
 
-remote_ip = "204.141.172.32" # [204.141.172.10, ]
+# remote_ip = "204.141.172.10" # [204.141.172.10, ]
+remote_ip = os.getenv("REMOTE_IP")
 
 # interface = "enp1s0"
 # remote_mac = "00:00:17:4b:6f:6e" # enp1s0
 # local_mac = "02:00:17:02:d2:fe" # enp1s0
 # local_ip = "10.1.0.92" # enp1s0
-interface = "enp0s3"
-remote_mac = "00:00:17:f2:f0:c1" # enp0s3
-local_mac = "02:00:17:00:f4:b2" # enp0s3
-local_ip = "10.0.0.68" # enp0s3
-iptable = "ts-forward"
+# interface = "enp0s3"
+# remote_mac = "00:00:17:f2:f0:c1" # enp0s3
+# local_mac = "02:00:17:00:f4:b2" # enp0s3
+# local_ip = "10.0.0.68" # enp0s3
+
+interface = os.getenv("INTERFACE")
+remote_mac = os.getenv("REMOTE_MAC")
+local_mac = os.getenv("LOCAL_MAC")
+local_ip = os.getenv("LOCAL_IP")
+
+iptable = "FORWARD"
 window_size = 53374
 ttl = 63
 local_port1 = int(sys.argv[1])
@@ -71,8 +78,8 @@ latest_tcp_info2 = {
 }
 
 # ACKカウント（periodic送信制御用）
-ack_count1 = 0
-ack_count2 = 0
+ack_count1 = 1
+ack_count2 = 1
 
 
 # iptablesルールを設定
