@@ -77,3 +77,10 @@ sudo ip rule add from 192.168.240.0/24 table main
 # interfaceを戻す
 sudo ip rule del from 192.168.240.0/24 table main
 ```
+
+
+# tailscaleの場合
+```
+sudo iptables -I OUTPUT  -d 204.141.172.10 -p tcp --tcp-flags RST RST -j DROP
+```
+conntrackがDROP ruleに反応してRSTを投げるので抑止
