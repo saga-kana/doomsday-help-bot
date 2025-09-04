@@ -279,8 +279,8 @@ def packet_callback(pkt):
         ack_packet = Ether(dst=remote_mac, src=local_mac)/ack_packet
 
         # tcp_optionsが空でないときのみ送信
-        if tcp_options:
-            sendp(ack_packet, iface=interface, verbose=0)
+        # if tcp_options:
+        sendp(ack_packet, iface=interface, verbose=0)
 
 
         # ACKカウントをインクリメント
