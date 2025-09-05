@@ -280,7 +280,9 @@ def packet_callback(pkt):
 
         # tcp_optionsが空でないときのみ送信
         # if tcp_options:
-        sendp(ack_packet, iface=interface, verbose=0)
+        
+        if not (pkt[TCP].flags & 0x04):
+            sendp(ack_packet, iface=interface, verbose=0)
 
 
         # ACKカウントをインクリメント
