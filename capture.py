@@ -283,6 +283,9 @@ def packet_callback(pkt):
         
         if not (pkt[TCP].flags & 0x04):
             sendp(ack_packet, iface=interface, verbose=0)
+        else:
+            print("⚠️ RST packet detected, not sending ACK")
+            pkt.show()
 
 
         # ACKカウントをインクリメント
