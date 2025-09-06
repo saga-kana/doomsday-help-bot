@@ -285,7 +285,7 @@ def packet_callback(pkt):
             sendp(ack_packet, iface=interface, verbose=0)
         else:
             print("⚠️ RST packet detected, not sending ACK")
-            pkt.show()
+            # pkt.show()
 
 
         # ACKカウントをインクリメント
