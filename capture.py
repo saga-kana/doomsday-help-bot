@@ -281,11 +281,12 @@ def packet_callback(pkt):
         # tcp_optionsが空でないときのみ送信
         # if tcp_options:
         
-        if not (pkt[TCP].flags & 0x04):
+        if not (pkt[TCP].flags & 0x01) and not (pkt[TCP].flags & 0x04):
             sendp(ack_packet, iface=interface, verbose=0)
         else:
             print("⚠️ RST packet detected, not sending ACK")
             # pkt.show()
+            return
 
 
         # ACKカウントをインクリメント
