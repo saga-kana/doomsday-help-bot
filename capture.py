@@ -516,9 +516,16 @@ atexit.register(cleanup_iptables)
 
 print(f"🔍 Capturing packets from {remote_ip} on {interface}... (Press Ctrl+C to stop)")
 # パケットをキャプチャ (パケットは自動的に破棄される)
+def stop_filter(packet):
+    if packet.haslayer('TCP'):
+        tcp_layer = packet['TCP']
+        return tcp_layer.flags & 0x04 or tcp_layer.flags & 0x01  # RST or FIN
+    return False
+
 sniff(
     iface=interface,
     filter=f"tcp and ip src {remote_ip} and ((dst port {local_port1} and src port {remote_port1}) or (dst port {local_port2} and src port {remote_port2}))",
     prn=packet_callback,
+    stop_filter=stop_filter,
     store=0
 )
