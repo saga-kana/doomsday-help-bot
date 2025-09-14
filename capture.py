@@ -519,7 +519,10 @@ print(f"🔍 Capturing packets from {remote_ip} on {interface}... (Press Ctrl+C 
 def stop_filter(packet):
     if packet.haslayer('TCP'):
         tcp_layer = packet['TCP']
-        return tcp_layer.flags & 0x04 or tcp_layer.flags & 0x01  # RST or FIN
+        # Only stop when source port is in secondary_ports and RST or FIN flag is set
+        src_port = tcp_layer.sport
+        if src_port in secondary_ports:
+            return tcp_layer.flags & 0x04 or tcp_layer.flags & 0x01  # RST or FIN
     return False
 
 sniff(
